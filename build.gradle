@@ -1,0 +1,72 @@
+buildscript {
+	dependencies {
+		classpath("org.springframework.boot:spring-boot-gradle-plugin:${springBootVersion}")
+		classpath("se.transmode.gradle:gradle-docker:${gradleDockerVersion}")
+	}
+}
+
+plugins {
+	id "cover.publishing.plugin" version "1.25"
+	id "cover.properties.plugin" version "1.25"
+	id "cover.coverage.plugin" version "1.25"
+}
+
+apply plugin: 'eclipse'
+apply plugin: 'groovy'
+apply plugin: 'docker'
+apply plugin: 'org.springframework.boot'
+
+group 'com.covergroup.learning'
+version = '0.1.' + build.number + '.' + build.name
+sourceCompatibility = 1.8
+
+dependencies {
+	compile group: 'org.springframework.boot', name: 'spring-boot-starter-data-mongodb', version: "${springBootDataMongoDB}"
+	compile group: 'org.springframework.boot', name: 'spring-boot-starter-data-rest', version: "${springBootDataRest}"
+	
+	compile group: 'org.springframework.cloud', name: 'spring-cloud-starter-config', version: "${springCloudConfigVersion}"	
+	
+	compile  group: 'org.apache.logging.log4j', name: 'log4j-api', version: "${log4jVersion}"
+	compile  group: 'org.apache.logging.log4j', name: 'log4j-core', version: "${log4jVersion}"
+	
+	compile  group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: "${jacksonVersion}"
+	compile  group: 'com.fasterxml.jackson.dataformat', name: 'jackson-dataformat-yaml', version: "${jacksonVersion}"
+
+	testCompile group: 'junit', name: 'junit', version: "${junitVersion}"
+	testCompile group: 'org.codehaus.groovy', name: 'groovy-all', version: "${groovyVersion}"
+	testCompile group: 'org.springframework', name: 'spring-test', version: "${springFrameworkVersion}"
+	testCompile group: 'org.springframework.boot', name: 'spring-boot-starter-test', version: "${springBootVersion}"
+	testCompile group: 'org.mockito', name: 'mockito-core', version: '2.12.0'
+	testCompile group: 'org.apache.httpcomponents', name: 'httpclient', version: '4.5.3'
+	testCompile group: 'de.flapdoodle.embed', name: 'de.flapdoodle.embed.mongo', version: "${embeddedMongoVersion}"
+}
+
+dependencyManagement {
+	imports {
+		mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
+	}
+}
+
+jacocoTestCoverageVerification {
+	afterEvaluate {
+		classDirectories = files(classDirectories.files.collect {
+			fileTree(dir: it, excludes: ['com/covergroup/business/channel/ChannelType.class',
+										 'com/covergroup/business/commands/DealCommandType.class',
+										 'com/covergroup/business/events/DealEventType.class'])
+		})
+	}
+}
+
+bootRun.systemProperties = System.properties
+
+task buildDocker(type: Docker) {
+	baseImage = 'frolvlad/alpine-oraclejdk8:slim'
+	push = dockerPushImage.toBoolean()
+	tag = 'registry.cover3d.com/platform/business/' + rootProject.name
+	version = dockerTagVersion
+	addFile {
+	  from jar
+	  rename { rootProject.name+'.jar'}
+	}
+	entryPoint(['java', '-Xmx128m','-Dspring.profiles.active=${SPRING_PROFILE}','-Djava.security.egd=file:/dev/./urandom', '-jar', rootProject.name+'.jar'])
+}
